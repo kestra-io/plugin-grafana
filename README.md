@@ -36,7 +36,7 @@
 <p align="center" style="color:grey;"><i>Get started with Kestra in 3 minutes.</i></p>
 
 
-# Kestra Plugin Template
+# Grafana Plugin for Kestra
 
 > A template for creating Kestra plugins
 
