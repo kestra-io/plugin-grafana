@@ -108,23 +108,6 @@ public abstract class AbstractLokiConnection extends Task {
         return res;
     }
 
-    protected HttpResponse<String> executePostReq(RunContext runContext, URI uri) throws Exception {
-        HttpClient client = createClient(runContext);
-        HttpRequest request = requestBuilder(runContext, uri)
-            .method("POST")
-            .build();
-
-        HttpResponse<String> res = client.request(request);
-        if (res.getStatus().getCode() < 200 || res.getStatus().getCode() >=300) {
-            throw new RuntimeException(
-                String.format("Loki API request failed with status %d: %s",
-                    res.getStatus().getCode(),
-                    res.getBody())
-            );
-        }
-        return res;
-    }
-
     protected String buildBaseUrl(RunContext runContext) throws IllegalVariableEvaluationException {
         String renderedUrl = runContext.render(this.url).as(String.class).orElseThrow();
         return renderedUrl.replaceAll("/$", "");
