@@ -1,5 +1,6 @@
 package io.kestra.plugin.grafana.loki.models;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
@@ -9,17 +10,20 @@ import java.util.List;
 import java.util.Map;
 
 @Data
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class LokiQueryResponse {
     private String status;
     private Data data;
 
     @lombok.Data
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Data {
         private String resultType;
         private List<Result> result;
     }
 
     @lombok.Data
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Result {
         @JsonProperty("stream")
         private Map<String, String> stream;
