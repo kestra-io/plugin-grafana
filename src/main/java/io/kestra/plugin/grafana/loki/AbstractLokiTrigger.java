@@ -38,7 +38,7 @@ public abstract class AbstractLokiTrigger extends AbstractTrigger {
     protected Property<String> authToken;
 
     @Schema(
-        title = "Tenant ID",
+        title = "Grafana Loki Tenant ID",
         description = "X-Scope-OrgID header value for multi-tenant Loki setups"
     )
     protected Property<String> tenantId;
