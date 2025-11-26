@@ -11,7 +11,6 @@ import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.grafana.loki.models.LokiQueryResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 
@@ -123,7 +122,6 @@ public class Query extends AbstractLokiConnection implements RunnableTask<Query.
 
         logger.info("Retrieved {} entries from Loki", logs.size());
 
-        // Emit metrics
         runContext.metric(Counter.of("records", logs.size()));
 
         return Output.builder()
