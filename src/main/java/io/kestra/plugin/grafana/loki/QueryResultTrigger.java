@@ -234,7 +234,7 @@ public class QueryResultTrigger extends AbstractLokiTrigger implements PollingTr
                     return false;
                 }
             })
-            .collect(java.util.stream.Collectors.toList());
+            .toList();
 
         writeState(runContext, rStateKey, state, rStateTtl);
 
