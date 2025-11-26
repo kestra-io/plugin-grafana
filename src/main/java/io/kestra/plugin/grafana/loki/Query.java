@@ -75,44 +75,18 @@ import java.util.Map;
     metrics = {
         @Metric(
             name = "Records",
-            type = Counter.TYPE
+            type = Counter.TYPE,
+            description = "Total number of log entries retrieved from Loki instant query"
         )
     }
-
 )
 public class Query extends AbstractLokiConnection implements RunnableTask<Query.Output> {
-
-    @Schema(
-        title = "LogQL query",
-        description = "The LogQL query to execute. This endpoint is designed for metric-type queries (e.g., 'rate({job=\\\"api\\\"}[5m])'). Log-type queries may return an error."
-    )
-    @NotNull
-    private Property<String> query;
 
     @Schema(
         title = "Evaluation time",
         description = "The evaluation time for the query as a nanosecond Unix epoch or another supported format (e.g., RFC3339). Defaults to now."
     )
     private Property<String> time;
-
-    @Schema(
-        title = "Limit",
-        description = "Maximum number of entries to return. Defaults to 100."
-    )
-    @Builder.Default
-    private Property<Integer> limit = Property.ofValue(100);
-
-    @Schema(
-        title = "Direction",
-        description = "Determines the sort order of results. Use FORWARD for ascending order, or BACKWARD for descending order. Defaults to BACKWARD."
-    )
-    @Builder.Default
-    private Property<Direction> direction = Property.ofValue(Direction.BACKWARD);
-
-    public enum Direction {
-        FORWARD,
-        BACKWARD
-    }
 
     @Override
     public Output run(RunContext runContext) throws Exception {
@@ -156,7 +130,6 @@ public class Query extends AbstractLokiConnection implements RunnableTask<Query.
             .logs(logs)
             .resultType(lokiQueryResponse.getData().getResultType())
             .build();
-
     }
 
     @Builder

@@ -15,6 +15,7 @@ import lombok.*;
 import lombok.experimental.SuperBuilder;
 
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 
 @SuperBuilder
@@ -125,7 +126,7 @@ public abstract class AbstractLokiTrigger extends AbstractTrigger {
                 }
                 uriBuilder.append(entry.getKey())
                     .append("=")
-                    .append(java.net.URLEncoder.encode(entry.getValue(), java.nio.charset.StandardCharsets.UTF_8));
+                    .append(java.net.URLEncoder.encode(entry.getValue(), StandardCharsets.UTF_8));
                 first = false;
             }
         }

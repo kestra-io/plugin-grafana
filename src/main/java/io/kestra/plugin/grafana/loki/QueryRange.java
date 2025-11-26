@@ -51,60 +51,48 @@ import java.util.Map;
             title = "Query with authentication and absolute time range",
             full = true,
             code = """
-                id: fetch_logs
-                type: io.kestra.plugin.grafana.loki.QueryRange
-                url: https://loki.example.com
-                token: "{{ secret('LOKI_TOKEN') }}"
-                tenantId: team-a
-                query: '{namespace="production", container="frontend"}'
-                start: "2024-01-01T00:00:00Z"
-                end: "2024-01-01T23:59:59Z"
-                limit: 5000
-                direction: BACKWARD
+                id: query_loki
+                namespace: company.team
+
+                tasks:
+                  - id: fetch_logs
+                    type: io.kestra.plugin.grafana.loki.QueryRange
+                    url: https://loki.example.com
+                    token: "{{ secret('LOKI_TOKEN') }}"
+                    tenantId: team-a
+                    query: '{namespace="production", container="frontend"}'
+                    start: "2024-01-01T00:00:00Z"
+                    end: "2024-01-01T23:59:59Z"
+                    limit: 5000
+                    direction: BACKWARD
                 """
         ),
         @Example(
             title = "Metric query with step interval",
             full = true,
             code = """
-                id: query_metrics
-                type: io.kestra.plugin.grafana.loki.QueryRange
-                url: http://localhost:3100
-                query: 'rate({job="api"}[5m])'
-                start: "{{ now() | dateAdd(-6, 'HOURS') }}"
-                step: 1m
-                """
-        ),
-        @Example(
-            title = "Stream query with interval",
-            full = true,
-            code = """
-                id: query_stream
-                type: io.kestra.plugin.grafana.loki.QueryRange
-                url: http://localhost:3100
-                query: '{environment="staging"}'
-                since: 2h
-                interval: 30s
-                direction: FORWARD
+                id: loki_test
+                namespace: company.team
+
+                tasks:
+                  - id: query_metrics
+                    type: io.kestra.plugin.grafana.loki.QueryRange
+                    url: http://localhost:3100
+                    query: 'rate({job="api"}[5m])'
+                    start: "{{ now() | dateAdd(-6, 'HOURS') }}"
+                    step: 1m
                 """
         )
     },
     metrics = {
         @Metric(
             name = "Records",
-            type = Counter.TYPE
+            type = Counter.TYPE,
+            description = "Total number of log entries retrieved from Loki range query"
         )
     }
-
 )
 public class QueryRange extends AbstractLokiConnection implements RunnableTask<QueryRange.Output> {
-
-    @Schema(
-        title = "LogQl query",
-        description = "The LogQL query to execute (e.g., '{job=\\\"api\\\"} |= \\\"error\\\"')"
-    )
-    @NotNull
-    private Property<String> query;
 
     @Schema(
         title = "Start time",
@@ -117,20 +105,6 @@ public class QueryRange extends AbstractLokiConnection implements RunnableTask<Q
         description = "The end time for the query as a nanosecond Unix epoch or another supported format (e.g., RFC3339). Defaults to now."
     )
     private Property<String> end;
-
-    @Schema(
-        title = "Limit",
-        description = "Maximum number of entries to return. Defaults to 100. Only applies to queries returning stream responses."
-    )
-    @Builder.Default
-    private Property<Integer> limit = Property.ofValue(100);
-
-    @Schema(
-        title = "Direction",
-        description = "Determines the sort order of logs. Use FORWARD to return logs in ascending timestamp order, or BACKWARD for descending order. Defaults to BACKWARD."
-    )
-    @Builder.Default
-    private Property<Direction> direction = Property.ofValue(Direction.BACKWARD);
 
     @Schema(
         title = "Step",
@@ -149,11 +123,6 @@ public class QueryRange extends AbstractLokiConnection implements RunnableTask<Q
         description = "Entries are returned at the specified interval. Only applies to log queries that return stream responses (e.g., '1m', '30s')."
     )
     private Property<String> interval;
-
-    public enum Direction {
-        FORWARD,
-        BACKWARD
-    }
 
     @Override
     public Output run(RunContext runContext) throws Exception {
@@ -217,7 +186,6 @@ public class QueryRange extends AbstractLokiConnection implements RunnableTask<Q
             .logs(logs)
             .resultType(lokiQueryResponse.getData().getResultType())
             .build();
-
     }
 
     @Builder

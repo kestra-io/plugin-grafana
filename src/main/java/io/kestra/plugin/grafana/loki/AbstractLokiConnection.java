@@ -15,6 +15,7 @@ import lombok.*;
 import lombok.experimental.SuperBuilder;
 
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 
 @SuperBuilder
@@ -57,6 +58,32 @@ public abstract class AbstractLokiConnection extends Task {
     @Builder.Default
     protected Property<Integer> readTimeout = Property.ofValue(60);
 
+    @Schema(
+        title = "LogQL query",
+        description = "The LogQL query to execute (e.g., '{job=\"api\"} |= \"error\"')"
+    )
+    @NotNull
+    protected Property<String> query;
+
+    @Schema(
+        title = "Limit",
+        description = "Maximum number of entries to return"
+    )
+    @Builder.Default
+    protected Property<Integer> limit = Property.ofValue(100);
+
+    @Schema(
+        title = "Direction",
+        description = "Determines the sort order of logs. Use FORWARD for ascending order, or BACKWARD for descending order. Defaults to BACKWARD."
+    )
+    @Builder.Default
+    protected Property<Direction> direction = Property.ofValue(Direction.BACKWARD);
+
+    public enum Direction {
+        FORWARD,
+        BACKWARD
+    }
+
     protected HttpClient createClient(RunContext runContext) throws IllegalVariableEvaluationException {
         Integer rConnectionTimeout = runContext.render(connectTimeout).as(Integer.class).orElse(30);
 
@@ -98,7 +125,7 @@ public abstract class AbstractLokiConnection extends Task {
 
         HttpResponse<String> res = client.request(request);
 
-        if (res.getStatus().getCode() < 200 || res.getStatus().getCode() >=300) {
+        if (res.getStatus().getCode() < 200 || res.getStatus().getCode() >= 300) {
             throw new RuntimeException(
                 String.format("Loki API request failed with status %d: %s",
                     res.getStatus().getCode(),
@@ -125,7 +152,7 @@ public abstract class AbstractLokiConnection extends Task {
                 }
                 uriBuilder.append(entry.getKey())
                     .append("=")
-                    .append(java.net.URLEncoder.encode(entry.getValue(), java.nio.charset.StandardCharsets.UTF_8));
+                    .append(java.net.URLEncoder.encode(entry.getValue(), StandardCharsets.UTF_8));
                 first = false;
             }
         }

@@ -53,7 +53,7 @@ import static io.kestra.core.models.triggers.StatefulTriggerService.*;
 
                 triggers:
                   - id: watch_security_logs
-                    type: io.kestra.plugin.grafana.loki.QueryResultTrigger
+                    type: io.kestra.plugin.grafana.loki.Trigger
                     url: http://loki.example.com:3100
                     authToken: "{{ secret('LOKI_TOKEN') }}"
                     tenantId: production
@@ -89,7 +89,7 @@ import static io.kestra.core.models.triggers.StatefulTriggerService.*;
 
                 triggers:
                   - id: monitor_errors
-                    type: io.kestra.plugin.grafana.loki.QueryResultTrigger
+                    type: io.kestra.plugin.grafana.loki.Trigger
                     url: https://loki.example.com:3100
                     authToken: "{{ secret('LOKI_TOKEN') }}"
                     tenantId: team-platform
@@ -106,7 +106,7 @@ import static io.kestra.core.models.triggers.StatefulTriggerService.*;
 
                 triggers:
                   - id: watch_payment_failures
-                    type: io.kestra.plugin.grafana.loki.QueryResultTrigger
+                    type: io.kestra.plugin.grafana.loki.Trigger
                     url: http://loki:3100
                     tenantId: payments-team
                     query: '{application="payment-gateway"} |= "payment failed" | json | amount > 1000'
@@ -122,7 +122,7 @@ import static io.kestra.core.models.triggers.StatefulTriggerService.*;
         )
     }
 )
-public class QueryResultTrigger extends AbstractLokiTrigger implements PollingTriggerInterface, TriggerOutput<QueryResultTrigger.Output>, StatefulTriggerInterface {
+public class Trigger extends AbstractLokiTrigger implements PollingTriggerInterface, TriggerOutput<Trigger.Output>, StatefulTriggerInterface {
 
     @Schema(
         title = "LogQL query to monitor",
