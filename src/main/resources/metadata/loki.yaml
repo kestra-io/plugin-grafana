@@ -1,0 +1,8 @@
+group: io.kestra.plugin.grafana.loki
+name: "loki"
+title: "Grafana-loki"
+description: "This sub-group contains tasks and models for interacting with Grafana Loki"
+body: ""
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"
