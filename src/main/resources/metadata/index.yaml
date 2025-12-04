@@ -1,8 +1,8 @@
 group: io.kestra.plugin.grafana
 name: "grafana"
 title: "Grafana"
-description: "Grafana Plugin for Kestra"
-body: ""
+description: "Tasks that query Grafana Loki and react to log and metric results with LogQL."
+body: "Configure the Loki base `url`, authentication token or tenant, and LogQL `query` to run instant or range queries or emit triggers on matching log streams, returning timestamps, labels, and counts you can use downstream."
 videos: []
 createdBy: "Kestra Core Team"
 managedBy: "Kestra Core Team"
