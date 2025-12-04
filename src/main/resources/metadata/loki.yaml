@@ -1,8 +1,8 @@
 group: io.kestra.plugin.grafana.loki
 name: "loki"
 title: "Grafana-loki"
-description: "This sub-group contains tasks and models for interacting with Grafana Loki"
-body: ""
+description: "Tasks that execute LogQL against Grafana Loki and trigger workflows from log patterns."
+body: "Set the Loki `url`, auth token or basic credentials, and LogQL `query` along with time range, direction, and limits to fetch logs or metrics, or use the polling trigger to start flows when new matching entries arrive."
 videos: []
 createdBy: "Kestra Core Team"
 managedBy: "Kestra Core Team"
