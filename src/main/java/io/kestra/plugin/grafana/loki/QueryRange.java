@@ -25,8 +25,8 @@ import java.util.Map;
 @ToString
 @NoArgsConstructor
 @Schema(
-    title = "Query logs from Grafana Loki within a time range",
-    description = "Execute LogQL queries against Loki over a specified time range. Supports both log queries (returning stream responses) and metric queries (returning matrix responses)."
+    title = "Run range LogQL query in Loki",
+    description = "Calls the `/loki/api/v1/query_range` endpoint over a window. Start defaults to now-1h, end to now, limit to 100, direction BACKWARD. Step is required for matrix queries; interval applies to stream queries only."
 )
 @Plugin(
     examples = {
@@ -95,31 +95,31 @@ public class QueryRange extends AbstractLokiConnection implements RunnableTask<Q
 
     @Schema(
         title = "Start time",
-        description = "The start time for the query as a nanosecond Unix epoch or another supported format (e.g., RFC3339). Defaults to one hour ago."
+        description = "Window start as nanosecond epoch or RFC3339; defaults to one hour before end time."
     )
     private Property<String> start;
 
     @Schema(
         title = "End time",
-        description = "The end time for the query as a nanosecond Unix epoch or another supported format (e.g., RFC3339). Defaults to now."
+        description = "Window end as nanosecond epoch or RFC3339; defaults to current time."
     )
     private Property<String> end;
 
     @Schema(
         title = "Step",
-        description = "Query resolution step width in duration format (e.g., '1m', '30s') or seconds. Applies only to metric queries that return matrix responses."
+        description = "Resolution step (duration like '1m' or seconds) for matrix/metric queries; ignored for stream results."
     )
     private Property<String> step;
 
     @Schema(
         title = "Since",
-        description = "Duration to calculate start time relative to end time (e.g., '1h', '30m'). Alternative to specifying absolute start time."
+        description = "Duration offset from end to compute start (e.g., '1h'); alternative to setting start explicitly."
     )
     private Property<String> since;
 
     @Schema(
         title = "Interval",
-        description = "Entries are returned at the specified interval. Only applies to log queries that return stream responses (e.g., '1m', '30s')."
+        description = "Sampling interval for stream responses (e.g., '1m'); ignored for matrix results."
     )
     private Property<String> interval;
 

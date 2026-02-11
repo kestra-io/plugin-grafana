@@ -28,10 +28,8 @@ import static io.kestra.core.models.triggers.StatefulTriggerService.*;
 @Getter
 @NoArgsConstructor
 @Schema(
-    title = "Trigger a flow when a Loki query returns new results",
-    description = "Polls Loki at regular intervals with a LogQL query and triggers a flow execution when new log entries matching the query are found. " +
-        "The trigger maintains state to track processed logs and only fires on new entries. " +
-        "Ideal for SecOps, SOAR, alerting, and monitoring use cases."
+    title = "Trigger flow on new Loki logs",
+    description = "Polls Loki with a LogQL range query and fires when new entries appear. State tracks seen records (default TTL 1 day) so each log triggers once. Uses forward sorting and limit 100 by default."
 )
 @Plugin(
     examples = {
@@ -126,42 +124,42 @@ public class Trigger extends AbstractLokiTrigger implements PollingTriggerInterf
 
     @Schema(
         title = "LogQL query to monitor",
-        description = "The LogQL query to execute. When this query returns new results, the flow will be triggered."
+        description = "Rendered LogQL expression; trigger fires when new results match."
     )
     @NotNull
     private Property<String> query;
 
     @Schema(
         title = "Polling interval",
-        description = "How often to check for new logs. Defaults to every 1 minute."
+        description = "How often to query Loki; ISO-8601 duration. Defaults to PT1M."
     )
     @Builder.Default
     private Duration interval = Duration.ofMinutes(1);
 
     @Schema(
         title = "Maximum records per trigger",
-        description = "Maximum number of log entries to return per trigger execution. Defaults to 100."
+        description = "Upper bound on log entries returned per poll; defaults to 100 and enforces forward order."
     )
     @Builder.Default
     private Property<Integer> maxRecords = Property.ofValue(100);
 
     @Schema(
         title = "Lookback window",
-        description = "Time window to look back for logs on first run (e.g., '1h', '30m', '1d'). Defaults to 10 minutes."
+        description = "Duration to backfill on the first run (e.g., '1h'); defaults to 10m."
     )
     @Builder.Default
     private Property<String> since = Property.ofValue("10m");
 
     @Schema(
         title = "State TTL",
-        description = "Time to live for the trigger state. After this duration, the state will be cleared. Defaults to 1 day."
+        description = "Retention for deduplication state; after TTL the trigger reprocesses logs. Defaults to 1 day."
     )
     @Builder.Default
     private Property<Duration> stateTtl = Property.ofValue(Duration.ofDays(1));
 
     @Schema(
         title = "Custom state key",
-        description = "Custom key for storing trigger state. If not provided, defaults to namespace.flow_id.trigger_id"
+        description = "Override the state storage key; defaults to `namespace.flow_id.trigger_id`"
     )
     private Property<String> stateKey;
 
