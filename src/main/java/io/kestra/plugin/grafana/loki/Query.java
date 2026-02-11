@@ -25,8 +25,8 @@ import java.util.Map;
 @ToString
 @NoArgsConstructor
 @Schema(
-    title = "Query logs from Grafana Loki at a single point in time",
-    description = "Execute instant LogQL queries against Loki at a specific point in time. This endpoint is primarily used for metric-type LogQL queries and returns vector results."
+    title = "Run instant LogQL query in Loki",
+    description = "Calls the `/loki/api/v1/query` endpoint at a single timestamp. Defaults to limit 100 and BACKWARD sort; time defaults to now."
 )
 @Plugin(
     examples = {
@@ -83,7 +83,7 @@ public class Query extends AbstractLokiConnection implements RunnableTask<Query.
 
     @Schema(
         title = "Evaluation time",
-        description = "The evaluation time for the query as a nanosecond Unix epoch or another supported format (e.g., RFC3339). Defaults to now."
+        description = "Timestamp for the instant query in nanoseconds or RFC3339; rendered from flow context. Defaults to current time."
     )
     private Property<String> time;
 
@@ -134,8 +134,8 @@ public class Query extends AbstractLokiConnection implements RunnableTask<Query.
     @Getter
     public static class Output implements io.kestra.core.models.tasks.Output {
         @Schema(
-            title = "List of query results",
-            description = "Each entry contains timestamp, labels, and either log line (for stream results) or value (for vector/matrix results)"
+            title = "Query results",
+            description = "Entries include timestamp, labels, and either log line (streams) or value (vector/matrix)"
         )
         private final List<Map<String, Object>> logs;
 
