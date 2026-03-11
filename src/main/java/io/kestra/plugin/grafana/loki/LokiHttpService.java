@@ -1,5 +1,10 @@
 package io.kestra.plugin.grafana.loki;
 
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.Map;
+
 import io.kestra.core.exceptions.IllegalVariableEvaluationException;
 import io.kestra.core.http.HttpRequest;
 import io.kestra.core.http.HttpResponse;
@@ -9,11 +14,6 @@ import io.kestra.core.http.client.configurations.TimeoutConfiguration;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.runners.RunContext;
 
-import java.net.URI;
-import java.nio.charset.StandardCharsets;
-import java.time.Duration;
-import java.util.Map;
-
 import static java.net.URLEncoder.encode;
 
 public class LokiHttpService {
@@ -22,9 +22,11 @@ public class LokiHttpService {
         Integer rConnectionTimeout = runContext.render(connectTimeout).as(Integer.class).orElse(30);
 
         HttpConfiguration configuration = HttpConfiguration.builder()
-            .timeout(TimeoutConfiguration.builder()
-                .connectTimeout(Property.ofValue(Duration.ofSeconds(rConnectionTimeout)))
-                .build())
+            .timeout(
+                TimeoutConfiguration.builder()
+                    .connectTimeout(Property.ofValue(Duration.ofSeconds(rConnectionTimeout)))
+                    .build()
+            )
             .build();
 
         return HttpClient.builder()
@@ -37,8 +39,7 @@ public class LokiHttpService {
         RunContext runContext,
         URI uri,
         Property<String> authToken,
-        Property<String> tenantId
-    ) throws IllegalVariableEvaluationException {
+        Property<String> tenantId) throws IllegalVariableEvaluationException {
         HttpRequest.HttpRequestBuilder requestBuilder = HttpRequest.builder()
             .uri(uri);
 
@@ -63,8 +64,7 @@ public class LokiHttpService {
         URI uri,
         Property<String> authToken,
         Property<String> tenantId,
-        Property<Integer> connectTimeout
-    ) throws Exception {
+        Property<Integer> connectTimeout) throws Exception {
         HttpClient client = createClient(runContext, connectTimeout);
         HttpRequest request = buildRequest(runContext, uri, authToken, tenantId)
             .method("GET")
@@ -74,9 +74,11 @@ public class LokiHttpService {
 
         if (res.getStatus().getCode() < 200 || res.getStatus().getCode() >= 300) {
             throw new RuntimeException(
-                String.format("Loki API request failed with status %d: %s",
+                String.format(
+                    "Loki API request failed with status %d: %s",
                     res.getStatus().getCode(),
-                    res.getBody())
+                    res.getBody()
+                )
             );
         }
         return res;
@@ -87,8 +89,7 @@ public class LokiHttpService {
         URI uri,
         Property<String> authToken,
         Property<String> tenantId,
-        Property<Integer> connectTimeout
-    ) throws Exception {
+        Property<Integer> connectTimeout) throws Exception {
         HttpClient client = createClient(runContext, connectTimeout);
         HttpRequest request = buildRequest(runContext, uri, authToken, tenantId)
             .method("POST")
@@ -98,9 +99,11 @@ public class LokiHttpService {
 
         if (res.getStatus().getCode() < 200 || res.getStatus().getCode() >= 300) {
             throw new RuntimeException(
-                String.format("Loki API request failed with status %d: %s",
+                String.format(
+                    "Loki API request failed with status %d: %s",
                     res.getStatus().getCode(),
-                    res.getBody())
+                    res.getBody()
+                )
             );
         }
         return res;

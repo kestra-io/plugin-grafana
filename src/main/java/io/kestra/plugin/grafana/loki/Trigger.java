@@ -1,6 +1,12 @@
 package io.kestra.plugin.grafana.loki;
 
+import java.net.URI;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.*;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.kestra.core.http.HttpResponse;
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
@@ -10,15 +16,11 @@ import io.kestra.core.models.property.Property;
 import io.kestra.core.models.triggers.*;
 import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.grafana.loki.models.LokiQueryResponse;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
-
-import java.net.URI;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.*;
 
 import static io.kestra.core.models.triggers.StatefulTriggerService.*;
 
@@ -216,7 +218,8 @@ public class Trigger extends AbstractLokiTrigger implements PollingTriggerInterf
         logger.debug("Found {} potential log entries", logs.size());
 
         List<Map<String, Object>> toFire = logs.stream()
-            .filter(log -> {
+            .filter(log ->
+            {
                 try {
                     String timestamp = (String) log.get("timestamp");
                     // Create a unique ID for the log entry
