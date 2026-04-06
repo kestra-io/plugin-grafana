@@ -20,6 +20,7 @@ import io.kestra.plugin.grafana.loki.models.LokiQueryResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
+import io.kestra.core.models.annotations.PluginProperty;
 
 @SuperBuilder
 @Getter
@@ -87,6 +88,7 @@ public class Query extends AbstractLokiConnection implements RunnableTask<Query.
         title = "Evaluation time",
         description = "Timestamp for the instant query in nanoseconds or RFC3339; rendered from flow context. Defaults to current time."
     )
+    @PluginProperty(group = "advanced")
     private Property<String> time;
 
     @Override

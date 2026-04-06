@@ -23,6 +23,7 @@ import lombok.*;
 import lombok.experimental.SuperBuilder;
 
 import static io.kestra.core.models.triggers.StatefulTriggerService.*;
+import io.kestra.core.models.annotations.PluginProperty;
 
 @SuperBuilder
 @ToString
@@ -129,6 +130,7 @@ public class Trigger extends AbstractLokiTrigger implements PollingTriggerInterf
         description = "Rendered LogQL expression; trigger fires when new results match."
     )
     @NotNull
+    @PluginProperty(group = "main")
     private Property<String> query;
 
     @Schema(
@@ -136,6 +138,7 @@ public class Trigger extends AbstractLokiTrigger implements PollingTriggerInterf
         description = "How often to query Loki; ISO-8601 duration. Defaults to PT1M."
     )
     @Builder.Default
+    @PluginProperty(group = "execution")
     private Duration interval = Duration.ofMinutes(1);
 
     @Schema(
@@ -143,6 +146,7 @@ public class Trigger extends AbstractLokiTrigger implements PollingTriggerInterf
         description = "Upper bound on log entries returned per poll; defaults to 100 and enforces forward order."
     )
     @Builder.Default
+    @PluginProperty(group = "execution")
     private Property<Integer> maxRecords = Property.ofValue(100);
 
     @Schema(
@@ -150,6 +154,7 @@ public class Trigger extends AbstractLokiTrigger implements PollingTriggerInterf
         description = "Duration to backfill on the first run (e.g., '1h'); defaults to 10m."
     )
     @Builder.Default
+    @PluginProperty(group = "advanced")
     private Property<String> since = Property.ofValue("10m");
 
     @Schema(
@@ -157,12 +162,14 @@ public class Trigger extends AbstractLokiTrigger implements PollingTriggerInterf
         description = "Retention for deduplication state; after TTL the trigger reprocesses logs. Defaults to 1 day."
     )
     @Builder.Default
+    @PluginProperty(group = "advanced")
     private Property<Duration> stateTtl = Property.ofValue(Duration.ofDays(1));
 
     @Schema(
         title = "Custom state key",
         description = "Override the state storage key; defaults to `namespace.flow_id.trigger_id`"
     )
+    @PluginProperty(group = "connection")
     private Property<String> stateKey;
 
     @Override

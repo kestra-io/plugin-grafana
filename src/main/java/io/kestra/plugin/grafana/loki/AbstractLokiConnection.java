@@ -13,6 +13,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
+import io.kestra.core.models.annotations.PluginProperty;
 
 @SuperBuilder
 @NoArgsConstructor
@@ -26,18 +27,21 @@ public abstract class AbstractLokiConnection extends Task {
         description = "HTTPS endpoint of the Loki API, including scheme (e.g., `http://localhost:3100` or `https://logs.example.com`)"
     )
     @NotNull
+    @PluginProperty(group = "main")
     protected Property<String> url;
 
     @Schema(
         title = "Bearer token",
         description = "Authorization header value for secured Loki deployments; render from secrets when possible"
     )
+    @PluginProperty(group = "connection")
     protected Property<String> authToken;
 
     @Schema(
         title = "Tenant ID",
         description = "X-Scope-OrgID header used by multi-tenant Loki clusters"
     )
+    @PluginProperty(group = "connection")
     protected Property<String> tenantId;
 
     @Schema(
@@ -45,6 +49,7 @@ public abstract class AbstractLokiConnection extends Task {
         description = "Connection timeout in seconds; defaults to 30"
     )
     @Builder.Default
+    @PluginProperty(group = "execution")
     protected Property<Integer> connectTimeout = Property.ofValue(30);
 
     @Schema(
@@ -52,6 +57,7 @@ public abstract class AbstractLokiConnection extends Task {
         description = "Read timeout in seconds; defaults to 60"
     )
     @Builder.Default
+    @PluginProperty(group = "execution")
     protected Property<Integer> readTimeout = Property.ofValue(60);
 
     @Schema(
@@ -59,6 +65,7 @@ public abstract class AbstractLokiConnection extends Task {
         description = "Rendered LogQL expression sent to Loki (e.g., `'{job=\"api\"} |= \"error\"'`)"
     )
     @NotNull
+    @PluginProperty(group = "main")
     protected Property<String> query;
 
     @Schema(
@@ -66,6 +73,7 @@ public abstract class AbstractLokiConnection extends Task {
         description = "Maximum number of entries to return; defaults to 100"
     )
     @Builder.Default
+    @PluginProperty(group = "advanced")
     protected Property<Integer> limit = Property.ofValue(100);
 
     @Schema(
@@ -73,6 +81,7 @@ public abstract class AbstractLokiConnection extends Task {
         description = "Use FORWARD for ascending timestamps or BACKWARD for descending; defaults to BACKWARD"
     )
     @Builder.Default
+    @PluginProperty(group = "advanced")
     protected Property<Direction> direction = Property.ofValue(Direction.BACKWARD);
 
     public enum Direction {
