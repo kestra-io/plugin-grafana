@@ -20,6 +20,7 @@ import io.kestra.plugin.grafana.loki.models.LokiQueryResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
+import io.kestra.core.models.annotations.PluginProperty;
 
 @SuperBuilder
 @Getter
@@ -99,30 +100,35 @@ public class QueryRange extends AbstractLokiConnection implements RunnableTask<Q
         title = "Start time",
         description = "Window start as nanosecond epoch or RFC3339; defaults to one hour before end time."
     )
+    @PluginProperty(group = "advanced")
     private Property<String> start;
 
     @Schema(
         title = "End time",
         description = "Window end as nanosecond epoch or RFC3339; defaults to current time."
     )
+    @PluginProperty(group = "advanced")
     private Property<String> end;
 
     @Schema(
         title = "Step",
         description = "Resolution step (duration like '1m' or seconds) for matrix/metric queries; ignored for stream results."
     )
+    @PluginProperty(group = "advanced")
     private Property<String> step;
 
     @Schema(
         title = "Since",
         description = "Duration offset from end to compute start (e.g., '1h'); alternative to setting start explicitly."
     )
+    @PluginProperty(group = "advanced")
     private Property<String> since;
 
     @Schema(
         title = "Interval",
         description = "Sampling interval for stream responses (e.g., '1m'); ignored for matrix results."
     )
+    @PluginProperty(group = "advanced")
     private Property<String> interval;
 
     @Override
