@@ -34,7 +34,7 @@ public abstract class AbstractLokiTrigger extends AbstractTrigger {
         title = "Bearer token",
         description = "Authorization header value for secured Loki deployments; render from secrets when possible"
     )
-    @PluginProperty(group = "connection")
+    @PluginProperty(secret = true, group = "connection")
     protected Property<String> authToken;
 
     @Schema(
