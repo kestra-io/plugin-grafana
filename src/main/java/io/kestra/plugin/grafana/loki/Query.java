@@ -53,12 +53,16 @@ import io.kestra.core.models.annotations.PluginProperty;
             full = true,
             code = """
                 id: query_historical_metrics
-                type: io.kestra.plugin.grafana.loki.Query
-                url: https://loki.example.com
-                token: "{{ secret('LOKI_TOKEN') }}"
-                tenantId: team-a
-                query: 'sum(rate({namespace="production"}[10m])) by (level)'
-                time: "2024-01-01T12:00:00Z"
+                namespace: company.team
+
+                tasks:
+                  - id: query
+                    type: io.kestra.plugin.grafana.loki.Query
+                    url: https://loki.example.com
+                    token: "{{ secret('LOKI_TOKEN') }}"
+                    tenantId: team-a
+                    query: 'sum(rate({namespace="production"}[10m])) by (level)'
+                    time: "2024-01-01T12:00:00Z"
                 """
         ),
         @Example(
@@ -66,11 +70,15 @@ import io.kestra.core.models.annotations.PluginProperty;
             full = true,
             code = """
                 id: query_metrics
-                type: io.kestra.plugin.grafana.loki.Query
-                url: https://loki.example.com
-                token: "{{ secret('LOKI_TOKEN') }}"
-                query: 'count_over_time({environment="staging"}[1h])'
-                direction: FORWARD
+                namespace: company.team
+
+                tasks:
+                  - id: query
+                    type: io.kestra.plugin.grafana.loki.Query
+                    url: https://loki.example.com
+                    token: "{{ secret('LOKI_TOKEN') }}"
+                    query: 'count_over_time({environment="staging"}[1h])'
+                    direction: FORWARD
                 """
         )
     },
