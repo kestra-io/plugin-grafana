@@ -101,6 +101,7 @@ import io.kestra.core.models.annotations.PluginProperty;
         ),
         @Example(
             title = "Trigger on payment failures (SOAR use case)",
+            full = true,
             code = """
                 id: payment_failure_handler
                 namespace: payments
