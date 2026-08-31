@@ -70,7 +70,7 @@ public class LokiHttpService {
             .method("GET")
             .build();
 
-        HttpResponse<String> res = client.request(request);
+        HttpResponse<String> res = client.request(request, String.class);
 
         if (res.getStatus().getCode() < 200 || res.getStatus().getCode() >= 300) {
             throw new RuntimeException(
@@ -95,7 +95,7 @@ public class LokiHttpService {
             .method("POST")
             .build();
 
-        HttpResponse<String> res = client.request(request);
+        HttpResponse<String> res = client.request(request, String.class);
 
         if (res.getStatus().getCode() < 200 || res.getStatus().getCode() >= 300) {
             throw new RuntimeException(
