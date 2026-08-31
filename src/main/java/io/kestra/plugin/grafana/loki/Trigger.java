@@ -208,13 +208,7 @@ public class Trigger extends AbstractLokiTrigger implements PollingTriggerInterf
         HttpResponse<String> res = executeGetReq(runContext, uri);
 
         ObjectMapper objectMapper = new ObjectMapper();
-        LokiQueryResponse lokiQueryResponse;
-        Object body = res.getBody();
-        if (body instanceof String) {
-            lokiQueryResponse = objectMapper.readValue((String) body, LokiQueryResponse.class);
-        } else {
-            lokiQueryResponse = objectMapper.convertValue(body, LokiQueryResponse.class);
-        }
+        LokiQueryResponse lokiQueryResponse = objectMapper.readValue((String) res.getBody(), LokiQueryResponse.class);
 
         List<Map<String, Object>> logs = lokiQueryResponse.toLogEntries();
 
