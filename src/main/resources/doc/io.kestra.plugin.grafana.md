@@ -4,7 +4,7 @@ Query logs from Grafana Loki from Kestra flows.
 
 ## Authentication
 
-Set `url` to your Loki endpoint (e.g. `http://localhost:3100`). For authenticated deployments, set `authToken` to the Bearer token value. For multi-tenant Loki clusters, set `tenantId` (sent as the `X-Scope-OrgID` header). Store secrets in [secrets](https://kestra.io/docs/concepts/secret) and apply connection properties globally with [plugin defaults](https://kestra.io/docs/workflow-components/plugin-defaults).
+Set `url` to your Loki endpoint (e.g. `http://localhost:3100`). For authenticated deployments, set `authToken` to the Bearer token value. For multi-tenant Loki clusters, set `tenantId` (sent as the `X-Scope-OrgID` header). Store secrets in [secrets](https://kestra.io/docs/concepts/secret) and set connection properties on each task.
 
 ## Tasks
 
