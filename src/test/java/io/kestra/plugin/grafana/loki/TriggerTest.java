@@ -6,6 +6,7 @@ import com.github.tomakehurst.wiremock.WireMockServer;
 import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.executions.Execution;
 import io.kestra.core.models.property.Property;
+import io.kestra.core.models.validations.ModelValidator;
 import io.kestra.core.runners.RunContextFactory;
 import io.kestra.core.utils.IdUtils;
 import io.kestra.core.utils.TestsUtils;
@@ -17,12 +18,16 @@ import org.junit.jupiter.api.Test;
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @KestraTest
 class TriggerTest {
 
     @Inject
     private RunContextFactory runContextFactory;
+
+    @Inject
+    private ModelValidator modelValidator;
 
     private WireMockServer wireMockServer;
 
@@ -95,5 +100,49 @@ class TriggerTest {
         Optional<Execution> execution = trigger.evaluate(context.getKey(), context.getValue());
 
         assertThat(execution.isPresent(), is(false));
+    }
+
+    @Test
+    void shouldFailWhenLokiRespondsSlowerThanReadTimeout() throws Exception {
+        wireMockServer.stubFor(get(urlPathMatching("/loki/api/v1/query_range.*"))
+            .willReturn(okJson("""
+                {
+                  "status": "success",
+                  "data": {
+                    "resultType": "streams",
+                    "result": []
+                  }
+                }
+                """).withFixedDelay(3000)));
+
+        var trigger = Trigger.builder()
+            .id("loki-" + IdUtils.create())
+            .type(Trigger.class.getName())
+            .url(Property.ofValue(wireMockServer.baseUrl()))
+            .query(Property.ofValue("{job=\"security\"}"))
+            .readTimeout(Property.ofValue(1))
+            .build();
+
+        var context = TestsUtils.mockTrigger(runContextFactory, trigger);
+
+        var thrown = assertThrows(Exception.class, () -> trigger.evaluate(context.getKey(), context.getValue()));
+
+        ReadTimeoutAssertions.assertCausedByReadTimeout(thrown);
+    }
+
+    @Test
+    void shouldRejectNonPositiveReadTimeout() {
+        var violation = modelValidator.isValid(
+            Trigger.builder()
+                .id("loki-" + IdUtils.create())
+                .type(Trigger.class.getName())
+                .url(Property.ofValue("http://localhost:3100"))
+                .query(Property.ofValue("{job=\"security\"}"))
+                .readTimeout(Property.ofValue(0))
+                .build()
+        );
+
+        assertThat(violation.isPresent(), is(true));
+        assertThat(violation.get().getMessage(), containsString("readTimeout"));
     }
 }
