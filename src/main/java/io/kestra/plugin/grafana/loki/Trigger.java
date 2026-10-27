@@ -187,57 +187,81 @@ public class Trigger extends AbstractLokiTrigger implements PollingTriggerInterf
 
         Map<String, StatefulTriggerService.Entry> state = readState(runContext, rStateKey, rStateTtl);
 
+        List<Map<String, Object>> toFire = new ArrayList<>();
         String queryStart = null;
         String queryEnd = String.valueOf(Instant.now().toEpochMilli() * 1_000_000); // Current time in nanoseconds
-
-        // Build query parameters
-        Map<String, String> queryParams = new HashMap<>();
-        queryParams.put("query", rQuery);
-        queryParams.put("limit", String.valueOf(rMaxRecords));
-        queryParams.put("direction", "forward"); // Always forward to get oldest first
-        queryParams.put("since", rSince);
-        queryParams.put("end", queryEnd);
-
-        // Execute query
         String baseUrl = buildBaseUrl(runContext);
         String endpoint = baseUrl + "/loki/api/v1/query_range";
-        URI uri = buildUri(endpoint, queryParams);
-
-        logger.debug("Polling Loki: {}", uri);
-
-        HttpResponse<String> res = executeGetReq(runContext, uri);
-
         ObjectMapper objectMapper = new ObjectMapper();
-        LokiQueryResponse lokiQueryResponse = objectMapper.readValue((String) res.getBody(), LokiQueryResponse.class);
+        String resultType = null;
 
-        List<Map<String, Object>> logs = lokiQueryResponse.toLogEntries();
+        while (toFire.size() < rMaxRecords) {
+            Map<String, String> queryParams = new HashMap<>();
+            queryParams.put("query", rQuery);
+            queryParams.put("limit", String.valueOf(rMaxRecords));
+            queryParams.put("direction", "forward");
+            queryParams.put("end", queryEnd);
 
-        if (logs.isEmpty()) {
-            logger.debug("No logs found");
-            return Optional.empty();
-        }
+            if (queryStart == null) {
+                queryParams.put("since", rSince);
+            } else {
+                queryParams.put("start", queryStart);
+            }
 
-        logger.debug("Found {} potential log entries", logs.size());
+            URI uri = buildUri(endpoint, queryParams);
+            logger.debug("Polling Loki: {}", uri);
 
-        List<Map<String, Object>> toFire = logs.stream()
-            .filter(log ->
-            {
+            HttpResponse<String> res = executeGetReq(runContext, uri);
+            LokiQueryResponse lokiQueryResponse = objectMapper.readValue((String) res.getBody(), LokiQueryResponse.class);
+
+            if (lokiQueryResponse.getData() != null) {
+                resultType = lokiQueryResponse.getData().getResultType();
+            }
+
+            List<Map<String, Object>> logs = lokiQueryResponse.toLogEntries();
+            if (logs.isEmpty()) {
+                break;
+            }
+
+            logger.debug("Found {} potential log entries in page", logs.size());
+
+            for (Map<String, Object> log : logs) {
                 try {
                     String timestamp = (String) log.get("timestamp");
-                    // Create a unique ID for the log entry
-                    // We use timestamp + hash of content/labels to be unique
                     String content = log.containsKey("line") ? (String) log.get("line") : String.valueOf(log.get("value"));
                     Map<?, ?> labels = (Map<?, ?>) log.get("labels");
                     Entry candidate = getEntry(timestamp, content, labels);
 
-                    // Check if we should fire for this entry
-                    return computeAndUpdateState(state, candidate, On.CREATE).fire();
+                    if (computeAndUpdateState(state, candidate, On.CREATE).fire()) {
+                        toFire.add(log);
+                        if (toFire.size() >= rMaxRecords) {
+                            break;
+                        }
+                    }
                 } catch (Exception e) {
                     logger.warn("Failed to process log entry for state tracking", e);
-                    return false;
                 }
-            })
-            .toList();
+            }
+
+            if (logs.size() < rMaxRecords) {
+                break;
+            }
+
+            String lastTimestamp = (String) logs.get(logs.size() - 1).get("timestamp");
+            if (lastTimestamp == null) {
+                break;
+            }
+
+            if (lastTimestamp.equals(queryStart)) {
+                try {
+                    queryStart = String.valueOf(Long.parseLong(lastTimestamp) + 1);
+                } catch (NumberFormatException e) {
+                    break;
+                }
+            } else {
+                queryStart = lastTimestamp;
+            }
+        }
 
         writeState(runContext, rStateKey, state, rStateTtl);
 
@@ -259,7 +283,7 @@ public class Trigger extends AbstractLokiTrigger implements PollingTriggerInterf
             .logs(toFire)
             .count(toFire.size())
             .query(rQuery)
-            .resultType(lokiQueryResponse.getData().getResultType())
+            .resultType(resultType)
             .lastTimestamp(latestTimestamp)
             .build();
 
