@@ -185,18 +185,18 @@ public class Trigger extends AbstractLokiTrigger implements PollingTriggerInterf
         var rStateKey = runContext.render(stateKey).as(String.class).orElse(defaultKey(context.getNamespace(), context.getFlowId(), context.getTriggerId()));
         var rStateTtl = runContext.render(stateTtl).as(Duration.class);
 
-        Map<String, StatefulTriggerService.Entry> state = readState(runContext, rStateKey, rStateTtl);
+        var state = readState(runContext, rStateKey, rStateTtl);
 
-        List<Map<String, Object>> toFire = new ArrayList<>();
+        var toFire = new ArrayList<Map<String, Object>>();
         String queryStart = null;
-        String queryEnd = String.valueOf(Instant.now().toEpochMilli() * 1_000_000); // Current time in nanoseconds
-        String baseUrl = buildBaseUrl(runContext);
-        String endpoint = baseUrl + "/loki/api/v1/query_range";
-        ObjectMapper objectMapper = new ObjectMapper();
+        var queryEnd = String.valueOf(Instant.now().toEpochMilli() * 1_000_000); // Current time in nanoseconds
+        var baseUrl = buildBaseUrl(runContext);
+        var endpoint = baseUrl + "/loki/api/v1/query_range";
+        var objectMapper = new ObjectMapper();
         String resultType = null;
 
         while (toFire.size() < rMaxRecords) {
-            Map<String, String> queryParams = new HashMap<>();
+            var queryParams = new HashMap<String, String>();
             queryParams.put("query", rQuery);
             queryParams.put("limit", String.valueOf(rMaxRecords));
             queryParams.put("direction", "forward");
@@ -208,29 +208,29 @@ public class Trigger extends AbstractLokiTrigger implements PollingTriggerInterf
                 queryParams.put("start", queryStart);
             }
 
-            URI uri = buildUri(endpoint, queryParams);
+            var uri = buildUri(endpoint, queryParams);
             logger.debug("Polling Loki: {}", uri);
 
-            HttpResponse<String> res = executeGetReq(runContext, uri);
-            LokiQueryResponse lokiQueryResponse = objectMapper.readValue((String) res.getBody(), LokiQueryResponse.class);
+            var res = executeGetReq(runContext, uri);
+            var lokiQueryResponse = objectMapper.readValue((String) res.getBody(), LokiQueryResponse.class);
 
             if (lokiQueryResponse.getData() != null) {
                 resultType = lokiQueryResponse.getData().getResultType();
             }
 
-            List<Map<String, Object>> logs = lokiQueryResponse.toLogEntries();
+            var logs = lokiQueryResponse.toLogEntries();
             if (logs.isEmpty()) {
                 break;
             }
 
             logger.debug("Found {} potential log entries in page", logs.size());
 
-            for (Map<String, Object> log : logs) {
+            for (var log : logs) {
                 try {
-                    String timestamp = (String) log.get("timestamp");
-                    String content = log.containsKey("line") ? (String) log.get("line") : String.valueOf(log.get("value"));
-                    Map<?, ?> labels = (Map<?, ?>) log.get("labels");
-                    Entry candidate = getEntry(timestamp, content, labels);
+                    var timestamp = (String) log.get("timestamp");
+                    var content = log.containsKey("line") ? (String) log.get("line") : String.valueOf(log.get("value"));
+                    var labels = (Map<?, ?>) log.get("labels");
+                    var candidate = getEntry(timestamp, content, labels);
 
                     if (computeAndUpdateState(state, candidate, On.CREATE).fire()) {
                         toFire.add(log);
@@ -247,7 +247,7 @@ public class Trigger extends AbstractLokiTrigger implements PollingTriggerInterf
                 break;
             }
 
-            String lastTimestamp = (String) logs.get(logs.size() - 1).get("timestamp");
+            var lastTimestamp = (String) logs.get(logs.size() - 1).get("timestamp");
             if (lastTimestamp == null) {
                 break;
             }
@@ -273,13 +273,13 @@ public class Trigger extends AbstractLokiTrigger implements PollingTriggerInterf
         logger.info("Found {} new log entries", toFire.size());
 
         // Find the latest timestamp from the results
-        String latestTimestamp = toFire.stream()
+        var latestTimestamp = toFire.stream()
             .map(log -> (String) log.get("timestamp"))
             .filter(Objects::nonNull)
             .max(Comparator.naturalOrder())
             .orElse(queryEnd);
 
-        Output output = Output.builder()
+        var output = Output.builder()
             .logs(toFire)
             .count(toFire.size())
             .query(rQuery)
@@ -287,7 +287,7 @@ public class Trigger extends AbstractLokiTrigger implements PollingTriggerInterf
             .lastTimestamp(latestTimestamp)
             .build();
 
-        Execution execution = TriggerService.generateExecution(this, conditionContext, context, output);
+        var execution = TriggerService.generateExecution(this, conditionContext, context, output);
 
         return Optional.of(execution);
     }

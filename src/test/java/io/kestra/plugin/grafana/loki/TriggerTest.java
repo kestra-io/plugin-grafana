@@ -139,7 +139,7 @@ class TriggerTest {
                 }
                 """)));
 
-        Trigger trigger = Trigger.builder()
+        var trigger = Trigger.builder()
             .id("loki-" + IdUtils.create())
             .type(Trigger.class.getName())
             .url(Property.ofValue(wireMockServer.baseUrl()))
@@ -151,12 +151,12 @@ class TriggerTest {
         var context = TestsUtils.mockTrigger(runContextFactory, trigger);
 
         // First poll: processes line 001 and line 002
-        Optional<Execution> execution1 = trigger.evaluate(context.getKey(), context.getValue());
+        var execution1 = trigger.evaluate(context.getKey(), context.getValue());
         assertThat(execution1.isPresent(), is(true));
         assertThat(execution1.get().getTrigger().getVariables().get("count"), is(2));
 
         // Second poll: line 001 & 002 are in state -> paginates -> returns line 003
-        Optional<Execution> execution2 = trigger.evaluate(context.getKey(), context.getValue());
+        var execution2 = trigger.evaluate(context.getKey(), context.getValue());
         assertThat(execution2.isPresent(), is(true));
         assertThat(execution2.get().getTrigger().getVariables().get("count"), is(1));
     }
