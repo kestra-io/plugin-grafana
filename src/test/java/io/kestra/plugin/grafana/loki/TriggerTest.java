@@ -143,7 +143,7 @@ class TriggerTest {
             .id("loki-" + IdUtils.create())
             .type(Trigger.class.getName())
             .url(Property.ofValue(wireMockServer.baseUrl()))
-            .query(Property.ofValue("{job=\\"burst\\"}"))
+            .query(Property.ofValue("{job=\"burst\"}"))
             .maxRecords(Property.ofValue(2))
             .since(Property.ofValue("10m"))
             .build();
