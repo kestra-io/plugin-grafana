@@ -96,4 +96,69 @@ class TriggerTest {
 
         assertThat(execution.isPresent(), is(false));
     }
+
+    @Test
+    void shouldPaginateAcrossBatchesWhenMoreThanMaxRecordsInWindow() throws Exception {
+        wireMockServer.stubFor(get(urlPathEqualTo("/loki/api/v1/query_range"))
+            .withQueryParam("since", equalTo("10m"))
+            .willReturn(okJson("""
+                {
+                  "status": "success",
+                  "data": {
+                    "resultType": "streams",
+                    "result": [
+                      {
+                        "stream": {"job": "burst"},
+                        "values": [
+                          ["1700000000000000001", "log line 001"],
+                          ["1700000000000000002", "log line 002"]
+                        ]
+                      }
+                    ]
+                  }
+                }
+                """)));
+
+        wireMockServer.stubFor(get(urlPathEqualTo("/loki/api/v1/query_range"))
+            .withQueryParam("start", equalTo("1700000000000000002"))
+            .willReturn(okJson("""
+                {
+                  "status": "success",
+                  "data": {
+                    "resultType": "streams",
+                    "result": [
+                      {
+                        "stream": {"job": "burst"},
+                        "values": [
+                          ["1700000000000000002", "log line 002"],
+                          ["1700000000000000003", "log line 003"]
+                        ]
+                      }
+                    ]
+                  }
+                }
+                """)));
+
+        var trigger = Trigger.builder()
+            .id("loki-" + IdUtils.create())
+            .type(Trigger.class.getName())
+            .url(Property.ofValue(wireMockServer.baseUrl()))
+            .query(Property.ofValue("{job=\"burst\"}"))
+            .maxRecords(Property.ofValue(2))
+            .since(Property.ofValue("10m"))
+            .build();
+
+        var context = TestsUtils.mockTrigger(runContextFactory, trigger);
+
+        // First poll: processes line 001 and line 002
+        var execution1 = trigger.evaluate(context.getKey(), context.getValue());
+        assertThat(execution1.isPresent(), is(true));
+        assertThat(execution1.get().getTrigger().getVariables().get("count"), is(2));
+
+        // Second poll: line 001 & 002 are in state -> paginates -> returns line 003
+        var execution2 = trigger.evaluate(context.getKey(), context.getValue());
+        assertThat(execution2.isPresent(), is(true));
+        assertThat(execution2.get().getTrigger().getVariables().get("count"), is(1));
+    }
 }
+

@@ -185,59 +185,83 @@ public class Trigger extends AbstractLokiTrigger implements PollingTriggerInterf
         var rStateKey = runContext.render(stateKey).as(String.class).orElse(defaultKey(context.getNamespace(), context.getFlowId(), context.getTriggerId()));
         var rStateTtl = runContext.render(stateTtl).as(Duration.class);
 
-        Map<String, StatefulTriggerService.Entry> state = readState(runContext, rStateKey, rStateTtl);
+        var state = readState(runContext, rStateKey, rStateTtl);
 
+        var toFire = new ArrayList<Map<String, Object>>();
         String queryStart = null;
-        String queryEnd = String.valueOf(Instant.now().toEpochMilli() * 1_000_000); // Current time in nanoseconds
+        var queryEnd = String.valueOf(Instant.now().toEpochMilli() * 1_000_000); // Current time in nanoseconds
+        var baseUrl = buildBaseUrl(runContext);
+        var endpoint = baseUrl + "/loki/api/v1/query_range";
+        var objectMapper = new ObjectMapper();
+        String resultType = null;
 
-        // Build query parameters
-        Map<String, String> queryParams = new HashMap<>();
-        queryParams.put("query", rQuery);
-        queryParams.put("limit", String.valueOf(rMaxRecords));
-        queryParams.put("direction", "forward"); // Always forward to get oldest first
-        queryParams.put("since", rSince);
-        queryParams.put("end", queryEnd);
+        while (toFire.size() < rMaxRecords) {
+            var queryParams = new HashMap<String, String>();
+            queryParams.put("query", rQuery);
+            queryParams.put("limit", String.valueOf(rMaxRecords));
+            queryParams.put("direction", "forward");
+            queryParams.put("end", queryEnd);
 
-        // Execute query
-        String baseUrl = buildBaseUrl(runContext);
-        String endpoint = baseUrl + "/loki/api/v1/query_range";
-        URI uri = buildUri(endpoint, queryParams);
+            if (queryStart == null) {
+                queryParams.put("since", rSince);
+            } else {
+                queryParams.put("start", queryStart);
+            }
 
-        logger.debug("Polling Loki: {}", uri);
+            var uri = buildUri(endpoint, queryParams);
+            logger.debug("Polling Loki: {}", uri);
 
-        HttpResponse<String> res = executeGetReq(runContext, uri);
+            var res = executeGetReq(runContext, uri);
+            var lokiQueryResponse = objectMapper.readValue((String) res.getBody(), LokiQueryResponse.class);
 
-        ObjectMapper objectMapper = new ObjectMapper();
-        LokiQueryResponse lokiQueryResponse = objectMapper.readValue((String) res.getBody(), LokiQueryResponse.class);
+            if (lokiQueryResponse.getData() != null) {
+                resultType = lokiQueryResponse.getData().getResultType();
+            }
 
-        List<Map<String, Object>> logs = lokiQueryResponse.toLogEntries();
+            var logs = lokiQueryResponse.toLogEntries();
+            if (logs.isEmpty()) {
+                break;
+            }
 
-        if (logs.isEmpty()) {
-            logger.debug("No logs found");
-            return Optional.empty();
-        }
+            logger.debug("Found {} potential log entries in page", logs.size());
 
-        logger.debug("Found {} potential log entries", logs.size());
-
-        List<Map<String, Object>> toFire = logs.stream()
-            .filter(log ->
-            {
+            for (var log : logs) {
                 try {
-                    String timestamp = (String) log.get("timestamp");
-                    // Create a unique ID for the log entry
-                    // We use timestamp + hash of content/labels to be unique
-                    String content = log.containsKey("line") ? (String) log.get("line") : String.valueOf(log.get("value"));
-                    Map<?, ?> labels = (Map<?, ?>) log.get("labels");
-                    Entry candidate = getEntry(timestamp, content, labels);
+                    var timestamp = (String) log.get("timestamp");
+                    var content = log.containsKey("line") ? (String) log.get("line") : String.valueOf(log.get("value"));
+                    var labels = (Map<?, ?>) log.get("labels");
+                    var candidate = getEntry(timestamp, content, labels);
 
-                    // Check if we should fire for this entry
-                    return computeAndUpdateState(state, candidate, On.CREATE).fire();
+                    if (computeAndUpdateState(state, candidate, On.CREATE).fire()) {
+                        toFire.add(log);
+                        if (toFire.size() >= rMaxRecords) {
+                            break;
+                        }
+                    }
                 } catch (Exception e) {
                     logger.warn("Failed to process log entry for state tracking", e);
-                    return false;
                 }
-            })
-            .toList();
+            }
+
+            if (logs.size() < rMaxRecords) {
+                break;
+            }
+
+            var lastTimestamp = (String) logs.get(logs.size() - 1).get("timestamp");
+            if (lastTimestamp == null) {
+                break;
+            }
+
+            if (lastTimestamp.equals(queryStart)) {
+                try {
+                    queryStart = String.valueOf(Long.parseLong(lastTimestamp) + 1);
+                } catch (NumberFormatException e) {
+                    break;
+                }
+            } else {
+                queryStart = lastTimestamp;
+            }
+        }
 
         writeState(runContext, rStateKey, state, rStateTtl);
 
@@ -249,21 +273,21 @@ public class Trigger extends AbstractLokiTrigger implements PollingTriggerInterf
         logger.info("Found {} new log entries", toFire.size());
 
         // Find the latest timestamp from the results
-        String latestTimestamp = toFire.stream()
+        var latestTimestamp = toFire.stream()
             .map(log -> (String) log.get("timestamp"))
             .filter(Objects::nonNull)
             .max(Comparator.naturalOrder())
             .orElse(queryEnd);
 
-        Output output = Output.builder()
+        var output = Output.builder()
             .logs(toFire)
             .count(toFire.size())
             .query(rQuery)
-            .resultType(lokiQueryResponse.getData().getResultType())
+            .resultType(resultType)
             .lastTimestamp(latestTimestamp)
             .build();
 
-        Execution execution = TriggerService.generateExecution(this, conditionContext, context, output);
+        var execution = TriggerService.generateExecution(this, conditionContext, context, output);
 
         return Optional.of(execution);
     }
