@@ -86,6 +86,9 @@ public class LokiHttpService {
                 )
             );
         }
+        if (res.getBody() == null || res.getBody().isBlank()) {
+            throw new IllegalStateException("Loki returned an empty response for %s. Check the `url` and `tenantId`.".formatted(uri.getPath()));
+        }
         return res;
     }
 

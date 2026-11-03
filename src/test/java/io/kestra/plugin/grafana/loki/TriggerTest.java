@@ -267,6 +267,59 @@ class TriggerTest {
         wireMockServer.verify(getRequestedFor(urlPathEqualTo("/loki/api/v1/query_range")).withQueryParam("start", equalTo(String.valueOf(timestamp + 1))));
     }
 
+    @Test
+    void shouldRejectMetricQueries() {
+        wireMockServer.stubFor(
+            get(urlPathEqualTo("/loki/api/v1/query_range"))
+                .willReturn(okJson("""
+                    {"status": "success", "data": {"resultType": "matrix", "result": [{"metric": {}, "values": [[1700000000.123, "4"]]}]}}
+                    """))
+        );
+
+        var trigger = Trigger.builder()
+            .id("loki-%s".formatted(IdUtils.create()))
+            .type(Trigger.class.getName())
+            .url(Property.ofValue(wireMockServer.baseUrl()))
+            .query(Property.ofValue("count_over_time({job=\"a\"}[1m])"))
+            .build();
+        var context = TestsUtils.mockTrigger(runContextFactory, trigger);
+
+        var thrown = assertThrows(IllegalArgumentException.class, () -> trigger.evaluate(context.getKey(), context.getValue()));
+        assertThat(thrown.getMessage(), containsString("Use QueryRange"));
+    }
+
+    @Test
+    void shouldFailOnEmptyResponseBody() {
+        wireMockServer.stubFor(get(urlPathEqualTo("/loki/api/v1/query_range")).willReturn(ok("")));
+
+        var trigger = Trigger.builder()
+            .id("loki-%s".formatted(IdUtils.create()))
+            .type(Trigger.class.getName())
+            .url(Property.ofValue(wireMockServer.baseUrl()))
+            .query(Property.ofValue("{job=\"a\"}"))
+            .build();
+        var context = TestsUtils.mockTrigger(runContextFactory, trigger);
+
+        var thrown = assertThrows(IllegalStateException.class, () -> trigger.evaluate(context.getKey(), context.getValue()));
+        assertThat(thrown.getMessage(), containsString("empty response"));
+    }
+
+    @Test
+    void shouldRejectNonPositiveMaxRecords() {
+        var violation = modelValidator.isValid(
+            Trigger.builder()
+                .id("loki-%s".formatted(IdUtils.create()))
+                .type(Trigger.class.getName())
+                .url(Property.ofValue("http://localhost:3100"))
+                .query(Property.ofValue("{job=\"a\"}"))
+                .maxRecords(Property.ofValue(0))
+                .build()
+        );
+
+        assertThat(violation.isPresent(), is(true));
+        assertThat(violation.get().getMessage(), containsString("maxRecords"));
+    }
+
     private static String streams(String... streams) {
         return """
             {"status": "success", "data": {"resultType": "streams", "result": [%s]}}

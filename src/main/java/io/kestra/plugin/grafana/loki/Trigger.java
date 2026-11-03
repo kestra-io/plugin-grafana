@@ -16,6 +16,7 @@ import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.plugin.grafana.loki.models.LokiQueryResponse;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
@@ -151,7 +152,7 @@ public class Trigger extends AbstractLokiTrigger implements PollingTriggerInterf
     )
     @Builder.Default
     @PluginProperty(group = "execution")
-    private Property<Integer> maxRecords = Property.ofValue(100);
+    private Property<@Min(1) Integer> maxRecords = Property.ofValue(100);
 
     @Schema(
         title = "Lookback window",
@@ -213,13 +214,12 @@ public class Trigger extends AbstractLokiTrigger implements PollingTriggerInterf
             var uri = buildUri(endpoint, queryParams);
             logger.debug("Polling Loki: {}", uri);
 
-            var body = executeGetReq(runContext, uri).getBody();
-            if (body == null || body.isBlank()) {
-                throw new IllegalStateException("Loki returned an empty response for %s. Check the `url` and `tenantId`.".formatted(endpoint));
-            }
-            var lokiQueryResponse = JacksonMapper.ofJson().readValue(body, LokiQueryResponse.class);
+            var lokiQueryResponse = JacksonMapper.ofJson().readValue(executeGetReq(runContext, uri).getBody(), LokiQueryResponse.class);
             if (lokiQueryResponse.getData() != null) {
                 resultType = lokiQueryResponse.getData().getResultType();
+            }
+            if (resultType != null && !"streams".equals(resultType)) {
+                throw new IllegalArgumentException("The Loki Trigger supports log queries only, `%s` returned `%s`. Use QueryRange for metric queries.".formatted(rQuery, resultType));
             }
 
             // Streams are concatenated, so sort to fire the oldest lines first and page from the newest one.
@@ -269,12 +269,7 @@ public class Trigger extends AbstractLokiTrigger implements PollingTriggerInterf
 
         logger.info("Found {} new log entries", toFire.size());
 
-        // Find the latest timestamp from the results
-        var latestTimestamp = toFire.stream()
-            .map(log -> (String) log.get("timestamp"))
-            .filter(Objects::nonNull)
-            .max(Comparator.naturalOrder())
-            .orElse(queryEnd);
+        var latestTimestamp = Optional.ofNullable((String) toFire.getLast().get("timestamp")).orElse(queryEnd);
 
         var output = Output.builder()
             .logs(toFire)
