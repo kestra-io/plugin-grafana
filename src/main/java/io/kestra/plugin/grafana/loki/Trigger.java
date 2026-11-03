@@ -32,7 +32,7 @@ import static io.kestra.core.models.triggers.StatefulTriggerService.*;
     description = """
         Polls Loki with a LogQL range query and fires when new entries appear. State tracks seen records (default TTL 1 day) so each log triggers once, \
         and each execution gets at most `maxRecords` entries, oldest first. \
-        Each poll reads the `since` window in pages of `maxRecords` or 1000 lines, whichever is larger, so a busy window costs several requests per poll."""
+        Each poll reads the `since` window in pages of `maxRecords` lines, between 1000 and 5000, so a busy window costs several requests per poll."""
 )
 @Plugin(
     examples = {
@@ -126,6 +126,8 @@ import static io.kestra.core.models.triggers.StatefulTriggerService.*;
 )
 public class Trigger extends AbstractLokiTrigger implements PollingTriggerInterface, TriggerOutput<Trigger.Output>, StatefulTriggerInterface {
     private static final int MIN_PAGE_SIZE = 1000;
+    // Loki rejects larger pages with its default max_entries_limit_per_query.
+    private static final int MAX_PAGE_SIZE = 5000;
 
     @Schema(
         title = "LogQL query to monitor",
@@ -191,7 +193,7 @@ public class Trigger extends AbstractLokiTrigger implements PollingTriggerInterf
         var toFire = new ArrayList<Map<String, Object>>();
         var queryEnd = String.valueOf(Instant.now().toEpochMilli() * 1_000_000);
         var endpoint = "%s/loki/api/v1/query_range".formatted(buildBaseUrl(runContext));
-        var pageSize = Math.max(rMaxRecords, MIN_PAGE_SIZE);
+        var pageSize = Math.clamp(rMaxRecords, MIN_PAGE_SIZE, MAX_PAGE_SIZE);
         String resultType = null;
         String pageStart = null;
 
@@ -211,13 +213,18 @@ public class Trigger extends AbstractLokiTrigger implements PollingTriggerInterf
             var uri = buildUri(endpoint, queryParams);
             logger.debug("Polling Loki: {}", uri);
 
-            var res = executeGetReq(runContext, uri);
-            var lokiQueryResponse = JacksonMapper.ofJson().readValue((String) res.getBody(), LokiQueryResponse.class);
+            var body = executeGetReq(runContext, uri).getBody();
+            if (body == null || body.isBlank()) {
+                throw new IllegalStateException("Loki returned an empty response for %s. Check the `url` and `tenantId`.".formatted(endpoint));
+            }
+            var lokiQueryResponse = JacksonMapper.ofJson().readValue(body, LokiQueryResponse.class);
             if (lokiQueryResponse.getData() != null) {
                 resultType = lokiQueryResponse.getData().getResultType();
             }
 
-            var logs = lokiQueryResponse.toLogEntries();
+            // Streams are concatenated, so sort to fire the oldest lines first and page from the newest one.
+            var logs = new ArrayList<>(lokiQueryResponse.toLogEntries());
+            logs.sort(Comparator.comparing(log -> (String) log.get("timestamp"), Comparator.nullsFirst(Comparator.comparingLong(Long::parseLong))));
             logger.debug("Found {} potential log entries", logs.size());
 
             for (var log : logs) {
@@ -242,22 +249,15 @@ public class Trigger extends AbstractLokiTrigger implements PollingTriggerInterf
                 break;
             }
 
-            // Streams are concatenated, so the newest line can be anywhere in the page.
-            var newest = logs.stream()
-                .map(log -> (String) log.get("timestamp"))
-                .filter(Objects::nonNull)
-                .mapToLong(Long::parseLong)
-                .max();
-            if (newest.isEmpty()) {
+            var newest = (String) logs.getLast().get("timestamp");
+            if (newest == null) {
                 break;
             }
-
-            var nextStart = String.valueOf(newest.getAsLong());
-            if (nextStart.equals(pageStart)) {
-                logger.warn("More than {} lines share timestamp {}, skipping the rest of them. Raise maxRecords to read them all.", pageSize, nextStart);
-                nextStart = String.valueOf(newest.getAsLong() + 1);
+            if (newest.equals(pageStart)) {
+                logger.warn("At least {} lines share timestamp {}, the rest at that timestamp are skipped.", pageSize, newest);
+                newest = String.valueOf(Long.parseLong(newest) + 1);
             }
-            pageStart = nextStart;
+            pageStart = newest;
         }
 
         writeState(runContext, rStateKey, state, rStateTtl);

@@ -1,5 +1,7 @@
 package io.kestra.plugin.grafana.loki;
 
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.StringJoiner;
 
@@ -205,6 +207,64 @@ class TriggerTest {
         var second = trigger.evaluate(context.getKey(), context.getValue());
         assertThat(second.isPresent(), is(true));
         assertThat(second.get().getTrigger().getVariables().get("count"), is(1));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void shouldFireOldestLinesFirstAcrossStreams() throws Exception {
+        wireMockServer.stubFor(
+            get(urlPathEqualTo("/loki/api/v1/query_range"))
+                .willReturn(
+                    okJson(
+                        streams(
+                            "{\"stream\": {\"job\": \"a\"}, \"values\": [[\"1700000000000000003\", \"a3\"], [\"1700000000000000004\", \"a4\"]]}",
+                            "{\"stream\": {\"job\": \"b\"}, \"values\": [[\"1700000000000000001\", \"b1\"]]}"
+                        )
+                    )
+                )
+        );
+
+        var trigger = Trigger.builder()
+            .id("loki-%s".formatted(IdUtils.create()))
+            .type(Trigger.class.getName())
+            .url(Property.ofValue(wireMockServer.baseUrl()))
+            .query(Property.ofValue("{job=~\"a|b\"}"))
+            .maxRecords(Property.ofValue(2))
+            .build();
+        var context = TestsUtils.mockTrigger(runContextFactory, trigger);
+
+        var execution = trigger.evaluate(context.getKey(), context.getValue());
+
+        assertThat(execution.isPresent(), is(true));
+        var logs = (List<Map<String, Object>>) execution.get().getTrigger().getVariables().get("logs");
+        assertThat(logs.stream().map(log -> log.get("line")).toList(), contains("b1", "a3"));
+    }
+
+    @Test
+    void shouldStepPastTimestampSharedByFullPage() throws Exception {
+        var pageSize = 1000;
+        var timestamp = 1700000000000000000L;
+        var values = new StringJoiner(",");
+        for (var i = 0; i < pageSize; i++) {
+            values.add("[\"%d\", \"line %d\"]".formatted(timestamp, i));
+        }
+        var fullPage = okJson(streams("{\"stream\": {\"job\": \"a\"}, \"values\": [%s]}".formatted(values)));
+        wireMockServer.stubFor(get(urlPathEqualTo("/loki/api/v1/query_range")).withQueryParam("since", equalTo("10m")).willReturn(fullPage));
+        wireMockServer.stubFor(get(urlPathEqualTo("/loki/api/v1/query_range")).withQueryParam("start", equalTo(String.valueOf(timestamp))).willReturn(fullPage));
+        wireMockServer.stubFor(get(urlPathEqualTo("/loki/api/v1/query_range")).withQueryParam("start", equalTo(String.valueOf(timestamp + 1))).willReturn(okJson(streams())));
+
+        var trigger = Trigger.builder()
+            .id("loki-%s".formatted(IdUtils.create()))
+            .type(Trigger.class.getName())
+            .url(Property.ofValue(wireMockServer.baseUrl()))
+            .query(Property.ofValue("{job=\"a\"}"))
+            .maxRecords(Property.ofValue(pageSize))
+            .build();
+        var context = TestsUtils.mockTrigger(runContextFactory, trigger);
+
+        assertThat(trigger.evaluate(context.getKey(), context.getValue()).isPresent(), is(true));
+        assertThat(trigger.evaluate(context.getKey(), context.getValue()).isPresent(), is(false));
+        wireMockServer.verify(getRequestedFor(urlPathEqualTo("/loki/api/v1/query_range")).withQueryParam("start", equalTo(String.valueOf(timestamp + 1))));
     }
 
     private static String streams(String... streams) {

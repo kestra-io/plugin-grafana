@@ -89,34 +89,6 @@ public class LokiHttpService {
         return res;
     }
 
-    public static HttpResponse<String> executePostRequest(
-        RunContext runContext,
-        URI uri,
-        Property<String> authToken,
-        Property<String> tenantId,
-        Property<Integer> connectTimeout,
-        Property<Integer> readTimeout) throws Exception {
-        HttpRequest request = buildRequest(runContext, uri, authToken, tenantId)
-            .method("POST")
-            .build();
-
-        HttpResponse<String> res;
-        try (var client = createClient(runContext, connectTimeout, readTimeout)) {
-            res = client.request(request, String.class);
-        }
-
-        if (res.getStatus().getCode() < 200 || res.getStatus().getCode() >= 300) {
-            throw new RuntimeException(
-                String.format(
-                    "Loki API request failed with status %d: %s",
-                    res.getStatus().getCode(),
-                    res.getBody()
-                )
-            );
-        }
-        return res;
-    }
-
     public static String buildBaseUrl(RunContext runContext, Property<String> url) throws IllegalVariableEvaluationException {
         String renderedUrl = runContext.render(url).as(String.class).orElseThrow();
         return renderedUrl.replaceAll("/$", "");
