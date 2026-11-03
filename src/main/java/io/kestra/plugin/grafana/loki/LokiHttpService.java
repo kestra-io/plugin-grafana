@@ -18,13 +18,15 @@ import static java.net.URLEncoder.encode;
 
 public class LokiHttpService {
 
-    public static HttpClient createClient(RunContext runContext, Property<Integer> connectTimeout) throws IllegalVariableEvaluationException {
+    public static HttpClient createClient(RunContext runContext, Property<Integer> connectTimeout, Property<Integer> readTimeout) throws IllegalVariableEvaluationException {
         Integer rConnectionTimeout = runContext.render(connectTimeout).as(Integer.class).orElse(30);
+        var rReadTimeout = runContext.render(readTimeout).as(Integer.class).orElse(60);
 
         HttpConfiguration configuration = HttpConfiguration.builder()
             .timeout(
                 TimeoutConfiguration.builder()
                     .connectTimeout(Property.ofValue(Duration.ofSeconds(rConnectionTimeout)))
+                    .readIdleTimeout(Property.ofValue(Duration.ofSeconds(rReadTimeout)))
                     .build()
             )
             .build();
@@ -64,13 +66,16 @@ public class LokiHttpService {
         URI uri,
         Property<String> authToken,
         Property<String> tenantId,
-        Property<Integer> connectTimeout) throws Exception {
-        HttpClient client = createClient(runContext, connectTimeout);
+        Property<Integer> connectTimeout,
+        Property<Integer> readTimeout) throws Exception {
         HttpRequest request = buildRequest(runContext, uri, authToken, tenantId)
             .method("GET")
             .build();
 
-        HttpResponse<String> res = client.request(request, String.class);
+        HttpResponse<String> res;
+        try (var client = createClient(runContext, connectTimeout, readTimeout)) {
+            res = client.request(request, String.class);
+        }
 
         if (res.getStatus().getCode() < 200 || res.getStatus().getCode() >= 300) {
             throw new RuntimeException(
@@ -89,13 +94,16 @@ public class LokiHttpService {
         URI uri,
         Property<String> authToken,
         Property<String> tenantId,
-        Property<Integer> connectTimeout) throws Exception {
-        HttpClient client = createClient(runContext, connectTimeout);
+        Property<Integer> connectTimeout,
+        Property<Integer> readTimeout) throws Exception {
         HttpRequest request = buildRequest(runContext, uri, authToken, tenantId)
             .method("POST")
             .build();
 
-        HttpResponse<String> res = client.request(request, String.class);
+        HttpResponse<String> res;
+        try (var client = createClient(runContext, connectTimeout, readTimeout)) {
+            res = client.request(request, String.class);
+        }
 
         if (res.getStatus().getCode() < 200 || res.getStatus().getCode() >= 300) {
             throw new RuntimeException(

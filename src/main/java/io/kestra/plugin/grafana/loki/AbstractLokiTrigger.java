@@ -5,15 +5,16 @@ import java.util.Map;
 
 import io.kestra.core.exceptions.IllegalVariableEvaluationException;
 import io.kestra.core.http.HttpResponse;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.triggers.AbstractTrigger;
 import io.kestra.core.runners.RunContext;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
-import io.kestra.core.models.annotations.PluginProperty;
 
 @SuperBuilder
 @NoArgsConstructor
@@ -46,22 +47,22 @@ public abstract class AbstractLokiTrigger extends AbstractTrigger {
 
     @Schema(
         title = "HTTP connect timeout",
-        description = "Connection timeout in seconds; defaults to 30"
+        description = "Connection timeout in seconds; minimum 1, defaults to 30"
     )
     @Builder.Default
     @PluginProperty(group = "execution")
-    protected Property<Integer> connectTimeout = Property.ofValue(30);
+    protected Property<@Min(1) Integer> connectTimeout = Property.ofValue(30);
 
     @Schema(
         title = "HTTP read timeout",
-        description = "Read timeout in seconds; defaults to 60"
+        description = "Read timeout in seconds; minimum 1, defaults to 60"
     )
     @Builder.Default
     @PluginProperty(group = "execution")
-    protected Property<Integer> readTimeout = Property.ofValue(60);
+    protected Property<@Min(1) Integer> readTimeout = Property.ofValue(60);
 
     protected HttpResponse<String> executeGetReq(RunContext runContext, URI uri) throws Exception {
-        return LokiHttpService.executeGetRequest(runContext, uri, authToken, tenantId, connectTimeout);
+        return LokiHttpService.executeGetRequest(runContext, uri, authToken, tenantId, connectTimeout, readTimeout);
     }
 
     protected String buildBaseUrl(RunContext runContext) throws IllegalVariableEvaluationException {
