@@ -2,7 +2,12 @@ package io.kestra.plugin.grafana.loki;
 
 import java.util.Map;
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
 import com.github.tomakehurst.wiremock.WireMockServer;
+
 import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.flows.Flow;
 import io.kestra.core.models.property.Property;
@@ -11,10 +16,8 @@ import io.kestra.core.runners.RunContext;
 import io.kestra.core.runners.RunContextFactory;
 import io.kestra.core.serializers.YamlParser;
 import io.kestra.core.utils.TestsUtils;
+
 import jakarta.inject.Inject;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -45,21 +48,23 @@ class QueryTest {
 
     @Test
     void shouldParseVectorResponseWithoutClassCastException() throws Exception {
-        wireMockServer.stubFor(get(urlPathEqualTo("/loki/api/v1/query"))
-            .willReturn(okJson("""
-                {
-                  "status": "success",
-                  "data": {
-                    "resultType": "vector",
-                    "result": [
-                      {
-                        "metric": {"job": "api"},
-                        "value": ["1700000000000000000", "42"]
+        wireMockServer.stubFor(
+            get(urlPathEqualTo("/loki/api/v1/query"))
+                .willReturn(okJson("""
+                    {
+                      "status": "success",
+                      "data": {
+                        "resultType": "vector",
+                        "result": [
+                          {
+                            "metric": {"job": "api"},
+                            "value": ["1700000000000000000", "42"]
+                          }
+                        ]
                       }
-                    ]
-                  }
-                }
-                """)));
+                    }
+                    """))
+        );
 
         Query task = Query.builder()
             .id("query-" + TestsUtils.randomString())
@@ -80,16 +85,18 @@ class QueryTest {
 
     @Test
     void shouldParseEmptyResultSetWithoutError() throws Exception {
-        wireMockServer.stubFor(get(urlPathEqualTo("/loki/api/v1/query"))
-            .willReturn(okJson("""
-                {
-                  "status": "success",
-                  "data": {
-                    "resultType": "vector",
-                    "result": []
-                  }
-                }
-                """)));
+        wireMockServer.stubFor(
+            get(urlPathEqualTo("/loki/api/v1/query"))
+                .willReturn(okJson("""
+                    {
+                      "status": "success",
+                      "data": {
+                        "resultType": "vector",
+                        "result": []
+                      }
+                    }
+                    """))
+        );
 
         Query task = Query.builder()
             .id("query-" + TestsUtils.randomString())
@@ -107,16 +114,18 @@ class QueryTest {
 
     @Test
     void shouldFailWhenLokiRespondsSlowerThanReadTimeout() {
-        wireMockServer.stubFor(get(urlPathEqualTo("/loki/api/v1/query"))
-            .willReturn(okJson("""
-                {
-                  "status": "success",
-                  "data": {
-                    "resultType": "streams",
-                    "result": []
-                  }
-                }
-                """).withFixedDelay(3000)));
+        wireMockServer.stubFor(
+            get(urlPathEqualTo("/loki/api/v1/query"))
+                .willReturn(okJson("""
+                    {
+                      "status": "success",
+                      "data": {
+                        "resultType": "streams",
+                        "result": []
+                      }
+                    }
+                    """).withFixedDelay(3000))
+        );
 
         var task = Query.builder()
             .id("query-" + TestsUtils.randomString())
@@ -135,16 +144,18 @@ class QueryTest {
 
     @Test
     void shouldSucceedWhenLokiRespondsWithinReadTimeout() throws Exception {
-        wireMockServer.stubFor(get(urlPathEqualTo("/loki/api/v1/query"))
-            .willReturn(okJson("""
-                {
-                  "status": "success",
-                  "data": {
-                    "resultType": "streams",
-                    "result": []
-                  }
-                }
-                """).withFixedDelay(1000)));
+        wireMockServer.stubFor(
+            get(urlPathEqualTo("/loki/api/v1/query"))
+                .willReturn(okJson("""
+                    {
+                      "status": "success",
+                      "data": {
+                        "resultType": "streams",
+                        "result": []
+                      }
+                    }
+                    """).withFixedDelay(1000))
+        );
 
         var task = Query.builder()
             .id("query-" + TestsUtils.randomString())

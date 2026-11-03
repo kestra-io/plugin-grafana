@@ -68,12 +68,14 @@ public class LokiHttpService {
         Property<String> tenantId,
         Property<Integer> connectTimeout,
         Property<Integer> readTimeout) throws Exception {
-        var client = createClient(runContext, connectTimeout, readTimeout);
         HttpRequest request = buildRequest(runContext, uri, authToken, tenantId)
             .method("GET")
             .build();
 
-        HttpResponse<String> res = client.request(request, String.class);
+        HttpResponse<String> res;
+        try (var client = createClient(runContext, connectTimeout, readTimeout)) {
+            res = client.request(request, String.class);
+        }
 
         if (res.getStatus().getCode() < 200 || res.getStatus().getCode() >= 300) {
             throw new RuntimeException(
@@ -84,31 +86,8 @@ public class LokiHttpService {
                 )
             );
         }
-        return res;
-    }
-
-    public static HttpResponse<String> executePostRequest(
-        RunContext runContext,
-        URI uri,
-        Property<String> authToken,
-        Property<String> tenantId,
-        Property<Integer> connectTimeout,
-        Property<Integer> readTimeout) throws Exception {
-        var client = createClient(runContext, connectTimeout, readTimeout);
-        HttpRequest request = buildRequest(runContext, uri, authToken, tenantId)
-            .method("POST")
-            .build();
-
-        HttpResponse<String> res = client.request(request, String.class);
-
-        if (res.getStatus().getCode() < 200 || res.getStatus().getCode() >= 300) {
-            throw new RuntimeException(
-                String.format(
-                    "Loki API request failed with status %d: %s",
-                    res.getStatus().getCode(),
-                    res.getBody()
-                )
-            );
+        if (res.getBody() == null || res.getBody().isBlank()) {
+            throw new IllegalStateException("Loki returned an empty response for %s. Check the `url` and `tenantId`.".formatted(uri.getPath()));
         }
         return res;
     }

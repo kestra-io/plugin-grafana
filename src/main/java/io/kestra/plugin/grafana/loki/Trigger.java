@@ -1,29 +1,27 @@
 package io.kestra.plugin.grafana.loki;
 
-import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
-import io.kestra.core.http.HttpResponse;
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.conditions.ConditionContext;
 import io.kestra.core.models.executions.Execution;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.triggers.*;
 import io.kestra.core.runners.RunContext;
+import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.plugin.grafana.loki.models.LokiQueryResponse;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 
 import static io.kestra.core.models.triggers.StatefulTriggerService.*;
-import io.kestra.core.models.annotations.PluginProperty;
 
 @SuperBuilder
 @ToString
@@ -32,7 +30,10 @@ import io.kestra.core.models.annotations.PluginProperty;
 @NoArgsConstructor
 @Schema(
     title = "Trigger flow on new Loki logs",
-    description = "Polls Loki with a LogQL range query and fires when new entries appear. State tracks seen records (default TTL 1 day) so each log triggers once. Uses forward sorting and limit 100 by default."
+    description = """
+        Polls Loki with a LogQL range query and fires when new entries appear. State tracks seen records (default TTL 1 day) so each log triggers once, \
+        and each execution gets at most `maxRecords` entries, oldest first. \
+        Each poll reads the `since` window in pages of `maxRecords` lines, between 1000 and 5000, so a busy window costs several requests per poll."""
 )
 @Plugin(
     examples = {
@@ -125,6 +126,9 @@ import io.kestra.core.models.annotations.PluginProperty;
     }
 )
 public class Trigger extends AbstractLokiTrigger implements PollingTriggerInterface, TriggerOutput<Trigger.Output>, StatefulTriggerInterface {
+    private static final int MIN_PAGE_SIZE = 1000;
+    // Loki rejects larger pages with its default max_entries_limit_per_query.
+    private static final int MAX_PAGE_SIZE = 5000;
 
     @Schema(
         title = "LogQL query to monitor",
@@ -148,7 +152,7 @@ public class Trigger extends AbstractLokiTrigger implements PollingTriggerInterf
     )
     @Builder.Default
     @PluginProperty(group = "execution")
-    private Property<Integer> maxRecords = Property.ofValue(100);
+    private Property<@Min(1) Integer> maxRecords = Property.ofValue(100);
 
     @Schema(
         title = "Lookback window",
@@ -185,59 +189,76 @@ public class Trigger extends AbstractLokiTrigger implements PollingTriggerInterf
         var rStateKey = runContext.render(stateKey).as(String.class).orElse(defaultKey(context.getNamespace(), context.getFlowId(), context.getTriggerId()));
         var rStateTtl = runContext.render(stateTtl).as(Duration.class);
 
-        Map<String, StatefulTriggerService.Entry> state = readState(runContext, rStateKey, rStateTtl);
+        var state = readState(runContext, rStateKey, rStateTtl);
 
-        String queryStart = null;
-        String queryEnd = String.valueOf(Instant.now().toEpochMilli() * 1_000_000); // Current time in nanoseconds
+        var toFire = new ArrayList<Map<String, Object>>();
+        var queryEnd = String.valueOf(Instant.now().toEpochMilli() * 1_000_000);
+        var endpoint = "%s/loki/api/v1/query_range".formatted(buildBaseUrl(runContext));
+        var pageSize = Math.clamp(rMaxRecords, MIN_PAGE_SIZE, MAX_PAGE_SIZE);
+        String resultType = null;
+        String pageStart = null;
 
-        // Build query parameters
-        Map<String, String> queryParams = new HashMap<>();
-        queryParams.put("query", rQuery);
-        queryParams.put("limit", String.valueOf(rMaxRecords));
-        queryParams.put("direction", "forward"); // Always forward to get oldest first
-        queryParams.put("since", rSince);
-        queryParams.put("end", queryEnd);
+        // Loki caps each response, so page forward from the newest line seen. `start` is inclusive and the state drops the overlap.
+        while (toFire.size() < rMaxRecords) {
+            var queryParams = new HashMap<String, String>();
+            queryParams.put("query", rQuery);
+            queryParams.put("limit", String.valueOf(pageSize));
+            queryParams.put("direction", "forward");
+            queryParams.put("end", queryEnd);
+            if (pageStart == null) {
+                queryParams.put("since", rSince);
+            } else {
+                queryParams.put("start", pageStart);
+            }
 
-        // Execute query
-        String baseUrl = buildBaseUrl(runContext);
-        String endpoint = baseUrl + "/loki/api/v1/query_range";
-        URI uri = buildUri(endpoint, queryParams);
+            var uri = buildUri(endpoint, queryParams);
+            logger.debug("Polling Loki: {}", uri);
 
-        logger.debug("Polling Loki: {}", uri);
+            var lokiQueryResponse = JacksonMapper.ofJson().readValue(executeGetReq(runContext, uri).getBody(), LokiQueryResponse.class);
+            if (lokiQueryResponse.getData() != null) {
+                resultType = lokiQueryResponse.getData().getResultType();
+            }
+            if (resultType != null && !"streams".equals(resultType)) {
+                throw new IllegalArgumentException("The Loki Trigger supports log queries only, `%s` returned `%s`. Use QueryRange for metric queries.".formatted(rQuery, resultType));
+            }
 
-        HttpResponse<String> res = executeGetReq(runContext, uri);
+            // Streams are concatenated, so sort to fire the oldest lines first and page from the newest one.
+            var logs = new ArrayList<>(lokiQueryResponse.toLogEntries());
+            logs.sort(Comparator.comparing(log -> (String) log.get("timestamp"), Comparator.nullsFirst(Comparator.comparingLong(Long::parseLong))));
+            logger.debug("Found {} potential log entries", logs.size());
 
-        ObjectMapper objectMapper = new ObjectMapper();
-        LokiQueryResponse lokiQueryResponse = objectMapper.readValue((String) res.getBody(), LokiQueryResponse.class);
-
-        List<Map<String, Object>> logs = lokiQueryResponse.toLogEntries();
-
-        if (logs.isEmpty()) {
-            logger.debug("No logs found");
-            return Optional.empty();
-        }
-
-        logger.debug("Found {} potential log entries", logs.size());
-
-        List<Map<String, Object>> toFire = logs.stream()
-            .filter(log ->
-            {
+            for (var log : logs) {
                 try {
-                    String timestamp = (String) log.get("timestamp");
-                    // Create a unique ID for the log entry
-                    // We use timestamp + hash of content/labels to be unique
-                    String content = log.containsKey("line") ? (String) log.get("line") : String.valueOf(log.get("value"));
-                    Map<?, ?> labels = (Map<?, ?>) log.get("labels");
-                    Entry candidate = getEntry(timestamp, content, labels);
+                    var timestamp = (String) log.get("timestamp");
+                    var content = log.containsKey("line") ? (String) log.get("line") : String.valueOf(log.get("value"));
+                    var labels = (Map<?, ?>) log.get("labels");
+                    var candidate = getEntry(timestamp, content, labels);
 
-                    // Check if we should fire for this entry
-                    return computeAndUpdateState(state, candidate, On.CREATE).fire();
+                    if (computeAndUpdateState(state, candidate, On.CREATE).fire()) {
+                        toFire.add(log);
+                        if (toFire.size() >= rMaxRecords) {
+                            break;
+                        }
+                    }
                 } catch (Exception e) {
                     logger.warn("Failed to process log entry for state tracking", e);
-                    return false;
                 }
-            })
-            .toList();
+            }
+
+            if (logs.size() < pageSize) {
+                break;
+            }
+
+            var newest = (String) logs.getLast().get("timestamp");
+            if (newest == null) {
+                break;
+            }
+            if (newest.equals(pageStart)) {
+                logger.warn("At least {} lines share timestamp {}, the rest at that timestamp are skipped.", pageSize, newest);
+                newest = String.valueOf(Long.parseLong(newest) + 1);
+            }
+            pageStart = newest;
+        }
 
         writeState(runContext, rStateKey, state, rStateTtl);
 
@@ -248,22 +269,17 @@ public class Trigger extends AbstractLokiTrigger implements PollingTriggerInterf
 
         logger.info("Found {} new log entries", toFire.size());
 
-        // Find the latest timestamp from the results
-        String latestTimestamp = toFire.stream()
-            .map(log -> (String) log.get("timestamp"))
-            .filter(Objects::nonNull)
-            .max(Comparator.naturalOrder())
-            .orElse(queryEnd);
+        var latestTimestamp = Optional.ofNullable((String) toFire.getLast().get("timestamp")).orElse(queryEnd);
 
-        Output output = Output.builder()
+        var output = Output.builder()
             .logs(toFire)
             .count(toFire.size())
             .query(rQuery)
-            .resultType(lokiQueryResponse.getData().getResultType())
+            .resultType(resultType)
             .lastTimestamp(latestTimestamp)
             .build();
 
-        Execution execution = TriggerService.generateExecution(this, conditionContext, context, output);
+        var execution = TriggerService.generateExecution(this, conditionContext, context, output);
 
         return Optional.of(execution);
     }
